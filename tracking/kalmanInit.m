@@ -18,7 +18,7 @@
 function [A, B, u, H, P, R, Q, x] = kalmanInit(ROI)
     
     % smapling rate
-    dt=0.5;
+    dt=0.4;
 
     % State matrix (NxN) N -> Number of states 
     A = [1 0 dt  0;
@@ -42,11 +42,11 @@ function [A, B, u, H, P, R, Q, x] = kalmanInit(ROI)
         0 1 0 0];
 
     % Uncertainty
-    State_Uncertainty = 2;
+    State_Uncertainty = 0.8;
     P = State_Uncertainty * eye(size(A,1));
 
 
-    Meas_Unertainty = 5;
+    Meas_Unertainty = 10;
     R = Meas_Unertainty * eye(size(H,1));
 
     % Covariance Matrix
@@ -55,6 +55,7 @@ function [A, B, u, H, P, R, Q, x] = kalmanInit(ROI)
          (dt^3/2)     0     (dt^2)      0    ;
             0     (dt^3)/2     0     (dt^2)  ;
         ];
+    
     % Initial guess of the state values
     x = [ROI(1); ROI(2); 0; 0];
 end
