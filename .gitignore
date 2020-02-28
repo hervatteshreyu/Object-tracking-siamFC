@@ -1,5 +1,1 @@
-.DS_Store
-demo_sequences/car/
-demo_sequences/truckSign/
-demo_sequences/.DS_Store
 remove_ws.sh
