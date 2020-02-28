@@ -26,8 +26,8 @@ function [imgs, pos, target_sz] = load_video_info(base_path, video)
 	ground_truth = dlmread([base_path '/' video '/' 'groundtruth.csv']);
     
     figure(1); imshow([video_path, cell2mat(img_files(1))]);
-	region = [516,179, 33, 32]; %getrect();%ground_truth(1, :);
-    
+	region = getrect();%ground_truth(1, :);
+    %truckSign - [516,179, 33, 32];
     
 	[cx, cy, w, h] = get_axis_aligned_BB(region);
     pos = [cy cx]; % centre of the bounding box
