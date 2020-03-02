@@ -166,7 +166,7 @@ function bboxes = tracker(varargin)
                 
                 if ENABLE_KALMAN
                     figure(1), rectangle('Position', correctedRectPos, 'LineWidth', 4, 'EdgeColor', 'g');
-                    text(correctedRectPos(1), correctedRectPos(2)+correctedRectPos(4)+10, ...
+                    text(correctedRectPos(1), correctedRectPos(2)-30, ...
                     'Kalman', 'Color','green', 'FontSize', 14, 'FontWeight', 'bold');
                 end
                 drawnow
@@ -182,8 +182,11 @@ function bboxes = tracker(varargin)
         if p.bbox_output
             fprintf(p.fout,'%.2f,%.2f,%.2f,%.2f\n', bboxes(i, :));
         end
-
+        
+        F1(i+1) = getframe(gcf);
     end
 
     bboxes = bboxes(startFrame : i, :);
+    F1 = F1(:, 2:end);
+    writeVideo(F1, 'siamFC_Kalman');
 end

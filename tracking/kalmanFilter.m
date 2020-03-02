@@ -15,7 +15,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%
-function [kalmanOutput, P, x] = kalmanFilter(A, B, u, H, P, R, Q, x, input)
+function [kalmanOutput, P, x] = kalmanFilter(A, B, u, H, P, R, Q, x, measurement)
 
     % Estimate the next state
     x = A*x + B*u;
@@ -27,8 +27,8 @@ function [kalmanOutput, P, x] = kalmanFilter(A, B, u, H, P, R, Q, x, input)
     K = P*H'*pinv(H*P*H'+R);
     
     % Update the estimation
-    if(~isempty(input)) %Check if we have an input
-        x = x + K*(input - H*x);
+    if(~isempty(measurement)) %Check if we have an input
+        x = x + K*(measurement - H*x);
     end
     
     % Update the error covariance

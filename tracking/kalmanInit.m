@@ -35,18 +35,18 @@ function [A, B, u, H, P, R, Q, x] = kalmanInit(ROI)
         ];
 
     % Control vector (acceleration).
-    u = 0.1;
+    u = 0.04;
 
     % Measurement Matrix
     H = [1 0 0 0;
         0 1 0 0];
 
     % Uncertainty
-    State_Uncertainty = 0.8;
+    State_Uncertainty = 0.3;
     P = State_Uncertainty * eye(size(A,1));
 
 
-    Meas_Unertainty = 10;
+    Meas_Unertainty = 12;
     R = Meas_Unertainty * eye(size(H,1));
 
     % Covariance Matrix
