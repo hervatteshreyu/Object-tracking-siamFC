@@ -56,6 +56,8 @@ function bboxes = tracker(varargin)
     net_z = load_pretrained([p.net_base_path p.net], []);
     net_x = load_pretrained([p.net_base_path p.net], []);
     [imgFiles, targetPosition, targetSize] = load_video_info(p.seq_base_path, p.video);
+    
+    
     nImgs = numel(imgFiles);
     startFrame = 1;
     % Divide the net in 2
@@ -86,12 +88,18 @@ function bboxes = tracker(varargin)
     s_z = sqrt(wc_z*hc_z);
     s_z_original = s_z;
     scale_z = p.exemplarSize / s_z;
-    % initialize the exemplar
+
+    % initialize the exemplarx
+    objectOfInt = get_subwindow_tracking(im, targetPosition, targetSize, [], avgChans);
+    objectOfInt = imresize3(objectOfInt, [p.exemplarSize p.exemplarSize 3]);
+    objectOfInt_orig = objectOfInt;
+    
     [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
     if p.subMean
         z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
     end
-    z_crop_original=z_crop;
+    z_crop_original_old=z_crop;
+    z_crop_original = z_crop;
     d_search = (p.instanceSize - p.exemplarSize)/2;
     pad = d_search/scale_z;
     s_x = s_z + 2*pad;
@@ -103,6 +111,7 @@ function bboxes = tracker(varargin)
     max_s_x = 5*s_x;
     max_s_x_original = max_s_x;
     max_s_x_original_old = max_s_x;
+    
     if ENABLE_KALMAN
         [A, B, u, H, P_k, R, Q, x] = kalmanInit([targetPosition, targetSize]);
     end
@@ -115,13 +124,21 @@ function bboxes = tracker(varargin)
     % make the window sum 1
     window = window / sum(window(:));
     scales = (p.scaleStep .^ ((ceil(p.numScale/2)-p.numScale) : floor(p.numScale/2)));
+
     % evaluate the offline-trained network for exemplar z features
     net_z.eval({'exemplar', z_crop});
     z_features = net_z.vars(zFeatId).value;
     z_features = repmat(z_features, [1 1 1 p.numScale]);
-    
     z_features_orig = z_features;
     z_features_orig_old = z_features;
+    
+    net_z.eval({'exemplar', objectOfInt});
+    z_objInt = net_z.vars(zFeatId).value;
+    z_objInt = repmat(z_objInt, [1 1 1 p.numScale]);
+    z_objInt_orig = z_objInt;
+    z_objInt_orig_old = z_objInt;
+    
+
     bboxes = zeros(nImgs, 4);
     % start tracking
     tic;
@@ -135,37 +152,26 @@ function bboxes = tracker(varargin)
             end
             
             if ENABLE_TEMPLATE_UPDATE && i>startFrame+0 %(mod(i, 1) == 0)%startFrame+10
-                wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
-                hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
-                s_z = sqrt(wc_z*hc_z);
 
-                
-                % initialize the exemplar
-                [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
-                if p.subMean
-                    z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
-                end
-        
-                net_z.eval({'exemplar', z_crop});
-                z_features = net_z.vars(zFeatId).value;
-                z_features = repmat(z_features, [1 1 1 p.numScale]);
-                
-                correlation_coeff = corr2(double(z_features(:)), double(z_features_orig(:)))
-%                 correlation_coeff = 1;
-                if correlation_coeff < 0.8 && correlation_coeff > 0.7
-                    z_features = z_features_orig;
-%                     s_x = s_x_original;
-                    min_s_x = min_s_x_original;
-                    max_s_x = max_s_x_original;
+                objectOfInt = get_subwindow_tracking(im, targetPosition, targetSize, [], avgChans);
+                objectOfInt = imresize3(objectOfInt, [p.exemplarSize p.exemplarSize 3]);
+                net_z.eval({'exemplar', objectOfInt});
+                z_objInt = net_z.vars(zFeatId).value;
+                z_objInt = repmat(z_objInt, [1 1 1 p.numScale]);
+                correlation_coeff = corr2(double(z_objInt(:)), double(z_objInt_orig(:)))
+   
+                if correlation_coeff > 0.7
                     
-                elseif correlation_coeff <=0.7
-%                     s_x = s_x_original;
-                    z_features = z_features_orig_old;
-                    min_s_x = min_s_x_original_old;
-                    max_s_x = max_s_x_original_old;
-                        
-                else
+                    z_objInt_orig = z_objInt;
                     
+                    wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
+                    hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
+                    s_z = sqrt(wc_z*hc_z);
+                    % initialize the exemplar
+                    [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
+                    if p.subMean
+                        z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
+                    end
                     scale_z = p.exemplarSize / s_z;
                     d_search = (p.instanceSize - p.exemplarSize)/2;
                     pad = d_search/scale_z;
@@ -173,11 +179,57 @@ function bboxes = tracker(varargin)
                     % arbitrary scale saturation
                     min_s_x = 0.2*s_x;
                     max_s_x = 5*s_x;
-                    %% TO CHANGE/UPDATE ORIGINAL FEATURES TO THE NEWEST ONE?
-                    z_features_orig = z_features;
-                    min_s_x_original = min_s_x;
-                    max_s_x_original = max_s_x;
+  
+                else
+                    
+                    z_objInt_orig = z_objInt_orig_old;
+                                    
+                    z_features = z_features_orig_old;
+                    min_s_x = min_s_x_original_old;
+                    max_s_x = max_s_x_original_old;
+                    z_crop = z_crop_original_old;           
                 end
+                
+               
+        
+%                 net_z.eval({'exemplar', z_crop});
+%                 z_features = net_z.vars(zFeatId).value;
+%                 z_features = repmat(z_features, [1 1 1 p.numScale]);
+%                 
+%                 correlation_coeff = corr2(double(z_features(:)), double(z_features_orig(:)))
+% %                 correlation_coeff = 1;
+%                 if correlation_coeff < 0.985 && correlation_coeff > 0.97
+%                     z_features = z_features_orig;
+% %                     s_x = s_x_original;
+%                     min_s_x = min_s_x_original;
+%                     max_s_x = max_s_x_original;
+%                     z_crop = z_crop_original;
+%                     
+%                 elseif correlation_coeff <=0.96
+% %                     s_x = s_x_original;
+%                     z_features = z_features_orig_old;
+%                     min_s_x = min_s_x_original_old;
+%                     max_s_x = max_s_x_original_old;
+%                     z_crop = z_crop_original_old;
+%                     min_s_x_original = min_s_x_original_old;
+%                     max_s_x_original = max_s_x_original_old;
+%                     z_features_orig = z_features_orig_old;
+%                     
+%                 else
+%                     
+%                     scale_z = p.exemplarSize / s_z;
+%                     d_search = (p.instanceSize - p.exemplarSize)/2;
+%                     pad = d_search/scale_z;
+%                     s_x = s_z + 2*pad;
+%                     % arbitrary scale saturation
+%                     min_s_x = 0.2*s_x;
+%                     max_s_x = 5*s_x;
+%                     %% TO CHANGE/UPDATE ORIGINAL FEATURES TO THE NEWEST ONE?
+%                     z_features_orig = z_features;
+%                     min_s_x_original = min_s_x;
+%                     max_s_x_original = max_s_x;
+%                     z_crop_original = z_crop;
+%                 end
                 
             end
             scaledInstance = s_x .* scales;
@@ -217,6 +269,7 @@ function bboxes = tracker(varargin)
                 figure(1), imshow(im/255);
                 figure(1), rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
                 figure(2), imshow(uint8(z_crop), []);
+                figure(3), imshow(uint8(objectOfInt), []);
                 text(rectPosition(1), rectPosition(2)+rectPosition(4)-40, ...
                     'SiamFC', 'Color','yellow', 'FontSize', 14, 'FontWeight', 'bold');
                 

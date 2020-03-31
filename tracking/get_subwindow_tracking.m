@@ -40,7 +40,7 @@ function [im_patch, im_patch_original] = get_subwindow_tracking(im, pos, model_s
         im = cat(3, R, G, B);
     end
 
-    xs = context_xmin : context_xmax;
+    xs = context_xmin : floor(context_xmax);
     ys = context_ymin : context_ymax;
 
     im_patch_original = im(ys, xs, :);

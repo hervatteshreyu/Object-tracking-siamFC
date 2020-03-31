@@ -17,7 +17,7 @@ function [imgs, pos, target_sz] = load_video_info(base_path, video)
 	video_path = [base_path video '/imgs/'];
 
     %load all jpg files in the folder
-	img_files = dir([video_path '*.png']);
+	img_files = dir([video_path '*.jpg']);
 	assert(~isempty(img_files), 'No image files to load.')
 	img_files = sort({img_files.name});
     
