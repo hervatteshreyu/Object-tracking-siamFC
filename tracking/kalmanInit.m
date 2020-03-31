@@ -42,11 +42,11 @@ function [A, B, u, H, P, R, Q, x] = kalmanInit(ROI)
         0 1 0 0];
 
     % Uncertainty
-    State_Uncertainty = 0.3;
+    State_Uncertainty = 1;
     P = State_Uncertainty * eye(size(A,1));
 
 
-    Meas_Unertainty = 12;
+    Meas_Unertainty = 5;
     R = Meas_Unertainty * eye(size(H,1));
 
     % Covariance Matrix

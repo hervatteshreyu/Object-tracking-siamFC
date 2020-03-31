@@ -10,6 +10,7 @@ function bboxes = tracker(varargin)
     % The ones for SiamFC (5 scales) are in params-5s.txt
     
     ENABLE_KALMAN = 1;
+    ENABLE_TEMPLATE_UPDATE = 1;
     
     p.numScale = 3;
     p.scaleStep = 1.0375;
@@ -83,19 +84,23 @@ function bboxes = tracker(varargin)
     wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
     hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
     s_z = sqrt(wc_z*hc_z);
+    s_z_original = s_z;
     scale_z = p.exemplarSize / s_z;
     % initialize the exemplar
     [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
     if p.subMean
         z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
     end
+    z_crop_original=z_crop;
     d_search = (p.instanceSize - p.exemplarSize)/2;
     pad = d_search/scale_z;
     s_x = s_z + 2*pad;
+    s_x_original = s_x;
     % arbitrary scale saturation
     min_s_x = 0.2*s_x;
+    min_s_x_original = min_s_x;
     max_s_x = 5*s_x;
-    
+    max_s_x_original = max_s_x;
     if ENABLE_KALMAN
         [A, B, u, H, P_k, R, Q, x] = kalmanInit([targetPosition, targetSize]);
     end
@@ -112,8 +117,10 @@ function bboxes = tracker(varargin)
     net_z.eval({'exemplar', z_crop});
     z_features = net_z.vars(zFeatId).value;
     z_features = repmat(z_features, [1 1 1 p.numScale]);
-
+    
+    z_features_orig = z_features; 
     bboxes = zeros(nImgs, 4);
+    retrace = 0;
     % start tracking
     tic;
     for i = startFrame:nImgs
@@ -123,7 +130,53 @@ function bboxes = tracker(varargin)
    			% if grayscale repeat one channel to match filters size
     		if(size(im, 3)==1)
         		im = repmat(im, [1 1 3]);
-    		end
+            end
+            
+            if ENABLE_TEMPLATE_UPDATE && i>startFrame+5 %(mod(i, 1) == 0)%startFrame+10
+                if ~retrace
+                    wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
+                    hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
+                    s_z = sqrt(wc_z*hc_z);
+                end
+                
+                % initialize the exemplar
+                [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
+                if p.subMean
+                    z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
+                end
+        
+                net_z.eval({'exemplar', z_crop});
+                z_features = net_z.vars(zFeatId).value;
+                z_features = repmat(z_features, [1 1 1 p.numScale]);
+                
+                correlation_coeff = corr2(double(z_features(:)), double(z_features_orig(:)))
+%                 correlation_coeff = 1;
+                if correlation_coeff < 0.3
+                    z_features = z_features_orig;
+%                     s_x = s_x_original;
+                    min_s_x = min_s_x_original;
+                    max_s_x = max_s_x_original;
+                    s_z = s_z_original;
+                    retrace = 1;
+                else
+                    
+                    scale_z = p.exemplarSize / s_z;
+                    d_search = (p.instanceSize - p.exemplarSize)/2;
+                    pad = d_search/scale_z;
+                    s_x = s_z + 2*pad;
+                    % arbitrary scale saturation
+                    min_s_x = 0.2*s_x;
+                    max_s_x = 5*s_x;
+                    retrace = 0;
+                    %% TO CHANGE/UPDATE ORIGINAL FEATURES TO THE NEWEST ONE?
+                    z_features_orig = z_features;
+%                     s_x = s_x_original;
+                    min_s_x_original = min_s_x;
+                    max_s_x_original = max_s_x;
+                    s_z_original =s_z;
+                end
+                
+            end
             scaledInstance = s_x .* scales;
             scaledTarget = [targetSize(1) .* scales; targetSize(2) .* scales];
             % extract scaled crops for search region x at previous target position
@@ -160,7 +213,7 @@ function bboxes = tracker(varargin)
             if isempty(videoPlayer)
                 figure(1), imshow(im/255);
                 figure(1), rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
-       
+                figure(2), imshow(uint8(z_crop), []);
                 text(rectPosition(1), rectPosition(2)+rectPosition(4)-40, ...
                     'SiamFC', 'Color','yellow', 'FontSize', 14, 'FontWeight', 'bold');
                 
@@ -170,7 +223,7 @@ function bboxes = tracker(varargin)
                     'Kalman', 'Color','green', 'FontSize', 14, 'FontWeight', 'bold');
                 end
                 drawnow
-                fprintf('Frame %d\n', startFrame+i);
+%                 fprintf('Frame %d\n', startFrame+i);
             else
                 im = gather(im)/255;
                 im = insertShape(im, 'Rectangle', rectPosition, 'LineWidth', 4, 'Color', 'yellow');
@@ -183,10 +236,10 @@ function bboxes = tracker(varargin)
             fprintf(p.fout,'%.2f,%.2f,%.2f,%.2f\n', bboxes(i, :));
         end
         
-        F1(i+1) = getframe(gcf);
+%         F1(i+1) = getframe(gcf);
     end
 
     bboxes = bboxes(startFrame : i, :);
-    F1 = F1(:, 2:end);
-    writeVideo(F1, 'siamFC_Kalman');
+%     F1 = F1(:, 2:end);
+%     writeVideo(F1, 'siamFC_Kalman');
 end
