@@ -17,7 +17,7 @@ function [imgs, pos, target_sz] = load_video_info(base_path, video)
 	video_path = [base_path video '/imgs/'];
 
     %load all jpg files in the folder
-	img_files = dir([video_path '*.jpg']);
+	img_files = dir([video_path '*.png']);
 	assert(~isempty(img_files), 'No image files to load.')
 	img_files = sort({img_files.name});
     
@@ -26,7 +26,7 @@ function [imgs, pos, target_sz] = load_video_info(base_path, video)
 	ground_truth = dlmread([base_path '/' video '/' 'groundtruth.csv']);
     
     figure(1); imshow([video_path, cell2mat(img_files(1))]);
-	region =  getrect();%ground_truth(1, :);
+	region = getrect();%ground_truth(1, :);
     
     %ped - [1217.75,197.25,126,313.5];
     %truckSign - [516,179, 33, 32];

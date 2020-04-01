@@ -15,7 +15,7 @@
 function writeVideo(frames, videoName)
     
     writerObj = VideoWriter(videoName);
-    writerObj.FrameRate = 2;
+    writerObj.FrameRate = 10;
 
     % set the seconds per image
     % open the video writer
