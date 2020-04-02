@@ -1,0 +1,1 @@
+A=zeros(2,3,4);for k=1:4    for m=1:2        for n=1:3            A(m,n,k)=counter+1;            counter=counter+1;        end    endenddisp(A)

@@ -182,12 +182,17 @@ function bboxes = tracker(varargin)
   
                 else
                     
-                    z_objInt_orig = z_objInt_orig_old;
-                                    
-                    z_features = z_features_orig_old;
-                    min_s_x = min_s_x_original_old;
-                    max_s_x = max_s_x_original_old;
-                    z_crop = z_crop_original_old;           
+%                     z_objInt_orig = z_objInt_orig_old;
+%                                     
+%                     z_features = z_features_orig_old;
+%                     min_s_x = min_s_x_original_old;
+%                     max_s_x = max_s_x_original_old;
+%                     z_crop = z_crop_original_old;    
+                    
+                    z_features = z_features_orig;
+                    min_s_x = min_s_x_original;
+                    max_s_x = max_s_x_original;
+                    z_crop = z_crop_original; 
                 end
                 
                
@@ -268,21 +273,25 @@ function bboxes = tracker(varargin)
             if isempty(videoPlayer)
                 figure(1); imshow(im/255); hold on
                 rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
-                text(rectPosition(1), rectPosition(2)+rectPosition(4)-40, ...
+                text(rectPosition(1), rectPosition(2)+rectPosition(4)+10, ...
                     'SiamFC', 'Color','yellow', 'FontSize', 14, 'FontWeight', 'bold');
+                
+                if ENABLE_KALMAN
+                    rectangle('Position', correctedRectPos, 'LineWidth', 4, 'EdgeColor', 'g');
+                    text(correctedRectPos(1), correctedRectPos(2)-10, ...
+                    'Kalman', 'Color','green', 'FontSize', 14, 'FontWeight', 'bold');
+                end
                 hold off
+                
+                F1(i+1) = getframe(gcf);
                 figure(2); subplot(121); imshow(uint8(z_crop), []);
                 title('Examplar Image', 'Fontsize', 16)
                 xText = sprintf('correlation coefficient = %f', correlation_coeff);
                 xlabel(xText, 'Fontsize', 14);
                 subplot(122); imshow(uint8(objectOfInt), []);
                 title('Image ROI from previous frame', 'Fontsize', 14)
+                F2(i+1) = getframe(gcf);
                 
-                if ENABLE_KALMAN
-                    figure(1), rectangle('Position', correctedRectPos, 'LineWidth', 4, 'EdgeColor', 'g');
-                    text(correctedRectPos(1), correctedRectPos(2)-30, ...
-                    'Kalman', 'Color','green', 'FontSize', 14, 'FontWeight', 'bold');
-                end
                 drawnow
 %                 fprintf('Frame %d\n', startFrame+i);
             else
@@ -297,10 +306,12 @@ function bboxes = tracker(varargin)
             fprintf(p.fout,'%.2f,%.2f,%.2f,%.2f\n', bboxes(i, :));
         end
         
-        F1(i+1) = getframe(gcf);
+        
     end
 
     bboxes = bboxes(startFrame : i, :);
     F1 = F1(:, 2:end);
-    writeVideo(F1, 'siamFC_Kalman');
+    F2 = F2(:, 2:end);
+    writeVideo(F1, 'siamFC_Kalman_FV');
+    writeVideo(F2, 'siamFC_Kalman_EI');
 end
