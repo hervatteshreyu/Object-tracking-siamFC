@@ -54,7 +54,7 @@ for j = 1:length(threshold)
     successRate{j, 2} = mean(result_kalman);
     
     failure_siam(j, 1) = length(result_siamFC)-sum(result_siamFC);
-    failure_kalman(j, 1) = length(result_siamFC)-sum(result_siamFC);
+    failure_kalman(j, 1) = length(result_kalman)-sum(result_kalman);
 end
 
 accuracy_siam = mean(res_siam)*100;
@@ -66,6 +66,19 @@ fprintf('SiamFC_Kalman accuracy = %0.2f\n', accuracy_kalman);
 figure;
 plot(threshold, cell2mat(successRate(:, 1)), 'g', 'Linewidth', 3); hold on
 plot(threshold, cell2mat(successRate(:, 2)), 'r', 'Linewidth', 3); 
+hold off; grid on;
+xlabel('Threshold','FontSize',16);
+ylabel('Success Rate','FontSize',16);
+title('Success Rate plot', 'FontSize', 18)
 legend({'siamFC', 'siamFC\_Kalman'}, 'Fontsize', 16);
 axis([0, 1, -0.1, 1.1]);
+
+figure;
+plot(threshold, failure_siam, 'g', 'Linewidth', 3); hold on
+plot(threshold, failure_kalman, 'r', 'Linewidth', 3); 
+hold off; grid on;
+xlabel('Threshold','FontSize',16);
+ylabel('Failure Rate','FontSize',16);
+title('Failure Rate plot', 'FontSize', 18)
+legend({'siamFC', 'siamFC\_Kalman'}, 'Location', 'northwest', 'Fontsize', 16);
 
