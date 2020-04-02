@@ -181,61 +181,11 @@ function bboxes = tracker(varargin)
                     max_s_x = 5*s_x;
   
                 else
-                    
-%                     z_objInt_orig = z_objInt_orig_old;
-%                                     
-%                     z_features = z_features_orig_old;
-%                     min_s_x = min_s_x_original_old;
-%                     max_s_x = max_s_x_original_old;
-%                     z_crop = z_crop_original_old;    
-                    
                     z_features = z_features_orig;
                     min_s_x = min_s_x_original;
                     max_s_x = max_s_x_original;
                     z_crop = z_crop_original; 
-                end
-                
-               
-        
-%                 net_z.eval({'exemplar', z_crop});
-%                 z_features = net_z.vars(zFeatId).value;
-%                 z_features = repmat(z_features, [1 1 1 p.numScale]);
-%                 
-%                 correlation_coeff = corr2(double(z_features(:)), double(z_features_orig(:)))
-% %                 correlation_coeff = 1;
-%                 if correlation_coeff < 0.985 && correlation_coeff > 0.97
-%                     z_features = z_features_orig;
-% %                     s_x = s_x_original;
-%                     min_s_x = min_s_x_original;
-%                     max_s_x = max_s_x_original;
-%                     z_crop = z_crop_original;
-%                     
-%                 elseif correlation_coeff <=0.96
-% %                     s_x = s_x_original;
-%                     z_features = z_features_orig_old;
-%                     min_s_x = min_s_x_original_old;
-%                     max_s_x = max_s_x_original_old;
-%                     z_crop = z_crop_original_old;
-%                     min_s_x_original = min_s_x_original_old;
-%                     max_s_x_original = max_s_x_original_old;
-%                     z_features_orig = z_features_orig_old;
-%                     
-%                 else
-%                     
-%                     scale_z = p.exemplarSize / s_z;
-%                     d_search = (p.instanceSize - p.exemplarSize)/2;
-%                     pad = d_search/scale_z;
-%                     s_x = s_z + 2*pad;
-%                     % arbitrary scale saturation
-%                     min_s_x = 0.2*s_x;
-%                     max_s_x = 5*s_x;
-%                     %% TO CHANGE/UPDATE ORIGINAL FEATURES TO THE NEWEST ONE?
-%                     z_features_orig = z_features;
-%                     min_s_x_original = min_s_x;
-%                     max_s_x_original = max_s_x;
-%                     z_crop_original = z_crop;
-%                 end
-                
+                end                
             end
             scaledInstance = s_x .* scales;
             scaledTarget = [targetSize(1) .* scales; targetSize(2) .* scales];
@@ -283,14 +233,14 @@ function bboxes = tracker(varargin)
                 end
                 hold off
                 
-                F1(i+1) = getframe(gcf);
+%                 F1(i+1) = getframe(gcf);
                 figure(2); subplot(121); imshow(uint8(z_crop), []);
                 title('Examplar Image', 'Fontsize', 16)
                 xText = sprintf('correlation coefficient = %f', correlation_coeff);
                 xlabel(xText, 'Fontsize', 14);
                 subplot(122); imshow(uint8(objectOfInt), []);
                 title('Image ROI from previous frame', 'Fontsize', 14)
-                F2(i+1) = getframe(gcf);
+%                 F2(i+1) = getframe(gcf);
                 
                 drawnow
 %                 fprintf('Frame %d\n', startFrame+i);
@@ -310,8 +260,8 @@ function bboxes = tracker(varargin)
     end
 
     bboxes = bboxes(startFrame : i, :);
-    F1 = F1(:, 2:end);
-    F2 = F2(:, 2:end);
-    writeVideo(F1, 'siamFC_Kalman_FV');
-    writeVideo(F2, 'siamFC_Kalman_EI');
+%     F1 = F1(:, 2:end);
+%     F2 = F2(:, 2:end);
+%     writeVideo(F1, 'siamFC_Kalman_FV');
+%     writeVideo(F2, 'siamFC_Kalman_EI');
 end
