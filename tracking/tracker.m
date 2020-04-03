@@ -8,6 +8,10 @@ function bboxes = tracker(varargin)
 % -------------------------------------------------------------------------------------------------
     % These are the default hyper-params for SiamFC-3S
     % The ones for SiamFC (5 scales) are in params-5s.txt
+    
+    ENABLE_KALMAN = 1;
+    ENABLE_TEMPLATE_UPDATE = 1;
+    
     p.numScale = 3;
     p.scaleStep = 1.0375;
     p.scalePenalty = 0.9745;
@@ -52,6 +56,8 @@ function bboxes = tracker(varargin)
     net_z = load_pretrained([p.net_base_path p.net], []);
     net_x = load_pretrained([p.net_base_path p.net], []);
     [imgFiles, targetPosition, targetSize] = load_video_info(p.seq_base_path, p.video);
+    
+    
     nImgs = numel(imgFiles);
     startFrame = 1;
     % Divide the net in 2
@@ -76,23 +82,39 @@ function bboxes = tracker(varargin)
     end
     % get avg for padding
     avgChans = gather([mean(mean(im(:,:,1))) mean(mean(im(:,:,2))) mean(mean(im(:,:,3)))]);
-
+    
     wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
     hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
     s_z = sqrt(wc_z*hc_z);
+    s_z_original = s_z;
     scale_z = p.exemplarSize / s_z;
-    % initialize the exemplar
+
+    % initialize the exemplarx
+    objectOfInt = get_subwindow_tracking(im, targetPosition, targetSize, [], avgChans);
+    objectOfInt = imresize3(objectOfInt, [p.exemplarSize p.exemplarSize 3]);
+    objectOfInt_orig = objectOfInt;
+    
     [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
     if p.subMean
         z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
     end
+    z_crop_original_old=z_crop;
+    z_crop_original = z_crop;
     d_search = (p.instanceSize - p.exemplarSize)/2;
     pad = d_search/scale_z;
     s_x = s_z + 2*pad;
+    s_x_original = s_x;
     % arbitrary scale saturation
     min_s_x = 0.2*s_x;
+    min_s_x_original = min_s_x;
+    min_s_x_original_old = min_s_x;
     max_s_x = 5*s_x;
-
+    max_s_x_original = max_s_x;
+    max_s_x_original_old = max_s_x;
+    
+    if ENABLE_KALMAN
+        [A, B, u, H, P_k, R, Q, x] = kalmanInit([targetPosition, targetSize]);
+    end
     switch p.windowing
         case 'cosine'
             window = single(hann(p.scoreSize*p.responseUp) * hann(p.scoreSize*p.responseUp)');
@@ -102,11 +124,21 @@ function bboxes = tracker(varargin)
     % make the window sum 1
     window = window / sum(window(:));
     scales = (p.scaleStep .^ ((ceil(p.numScale/2)-p.numScale) : floor(p.numScale/2)));
+
     % evaluate the offline-trained network for exemplar z features
     net_z.eval({'exemplar', z_crop});
     z_features = net_z.vars(zFeatId).value;
     z_features = repmat(z_features, [1 1 1 p.numScale]);
-
+    z_features_orig = z_features;
+    z_features_orig_old = z_features;
+    
+    net_z.eval({'exemplar', objectOfInt});
+    z_objInt = net_z.vars(zFeatId).value;
+    z_objInt = repmat(z_objInt, [1 1 1 p.numScale]);
+    z_objInt_orig = z_objInt;
+    z_objInt_orig_old = z_objInt;
+    
+    correlation_coeff = 0;
     bboxes = zeros(nImgs, 4);
     % start tracking
     tic;
@@ -117,7 +149,44 @@ function bboxes = tracker(varargin)
    			% if grayscale repeat one channel to match filters size
     		if(size(im, 3)==1)
         		im = repmat(im, [1 1 3]);
-    		end
+            end
+            
+            if ENABLE_TEMPLATE_UPDATE && i>startFrame+0 %(mod(i, 1) == 0)%startFrame+10
+
+                objectOfInt = get_subwindow_tracking(im, targetPosition, targetSize, [], avgChans);
+                objectOfInt = imresize3(objectOfInt, [p.exemplarSize p.exemplarSize 3]);
+                net_z.eval({'exemplar', objectOfInt});
+                z_objInt = net_z.vars(zFeatId).value;
+                z_objInt = repmat(z_objInt, [1 1 1 p.numScale]);
+                correlation_coeff = corr2(double(z_objInt(:)), double(z_objInt_orig(:)));
+   
+                if correlation_coeff > 0.7
+                    
+                    z_objInt_orig = z_objInt;
+                    
+                    wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
+                    hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
+                    s_z = sqrt(wc_z*hc_z);
+                    % initialize the exemplar
+                    [z_crop, ~] = get_subwindow_tracking(im, targetPosition, [p.exemplarSize p.exemplarSize], [round(s_z) round(s_z)], avgChans);
+                    if p.subMean
+                        z_crop = bsxfun(@minus, z_crop, reshape(stats.z.rgbMean, [1 1 3]));
+                    end
+                    scale_z = p.exemplarSize / s_z;
+                    d_search = (p.instanceSize - p.exemplarSize)/2;
+                    pad = d_search/scale_z;
+                    s_x = s_z + 2*pad;
+                    % arbitrary scale saturation
+                    min_s_x = 0.2*s_x;
+                    max_s_x = 5*s_x;
+  
+                else
+                    z_features = z_features_orig;
+                    min_s_x = min_s_x_original;
+                    max_s_x = max_s_x_original;
+                    z_crop = z_crop_original; 
+                end                
+            end
             scaledInstance = s_x .* scales;
             scaledTarget = [targetSize(1) .* scales; targetSize(2) .* scales];
             % extract scaled crops for search region x at previous target position
@@ -138,12 +207,43 @@ function bboxes = tracker(varargin)
         oTargetSize = targetSize; % .* frameSize ./ newFrameSize;
         bboxes(i, :) = [oTargetPosition([2,1]) - oTargetSize([2,1])/2, oTargetSize([2,1])];
 
+        
+        %*********************************************
+        if ENABLE_KALMAN
+            kalmanInput          = targetPosition';
+            [kalmanOutput, P_k, x] = kalmanFilter(A, B, u, H, P_k, R, Q, x, kalmanInput); 
+            correctedROI = [kalmanOutput', targetSize];
+            targetPosition = correctedROI(1:2);
+            targetSize = correctedROI(3:4);
+            correctedRectPos = [correctedROI(2)-correctedROI(4)/2, correctedROI(1)-correctedROI(3)/2, correctedROI(4), correctedROI(3)];
+        end
+        %*********************************************
+        
         if p.visualization
             if isempty(videoPlayer)
-                figure(1), imshow(im/255);
-                figure(1), rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
+                figure(1); imshow(im/255); hold on
+                rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
+                text(rectPosition(1), rectPosition(2)+rectPosition(4)+10, ...
+                    'SiamFC', 'Color','yellow', 'FontSize', 14, 'FontWeight', 'bold');
+                
+                if ENABLE_KALMAN
+                    rectangle('Position', correctedRectPos, 'LineWidth', 4, 'EdgeColor', 'g');
+                    text(correctedRectPos(1), correctedRectPos(2)-10, ...
+                    'Kalman', 'Color','green', 'FontSize', 14, 'FontWeight', 'bold');
+                end
+                hold off
+                
+%                 F1(i+1) = getframe(gcf);
+                figure(2); subplot(121); imshow(uint8(z_crop), []);
+                title('Examplar Image', 'Fontsize', 16)
+                xText = sprintf('correlation coefficient = %f', correlation_coeff);
+                xlabel(xText, 'Fontsize', 14);
+                subplot(122); imshow(uint8(objectOfInt), []);
+                title('Image ROI from previous frame', 'Fontsize', 14)
+%                 F2(i+1) = getframe(gcf);
+                
                 drawnow
-                fprintf('Frame %d\n', startFrame+i);
+%                 fprintf('Frame %d\n', startFrame+i);
             else
                 im = gather(im)/255;
                 im = insertShape(im, 'Rectangle', rectPosition, 'LineWidth', 4, 'Color', 'yellow');
@@ -155,8 +255,13 @@ function bboxes = tracker(varargin)
         if p.bbox_output
             fprintf(p.fout,'%.2f,%.2f,%.2f,%.2f\n', bboxes(i, :));
         end
-
+        
+        
     end
 
     bboxes = bboxes(startFrame : i, :);
+%     F1 = F1(:, 2:end);
+%     F2 = F2(:, 2:end);
+%     writeVideo(F1, 'siamFC_Kalman_FV');
+%     writeVideo(F2, 'siamFC_Kalman_EI');
 end
