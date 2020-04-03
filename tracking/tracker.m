@@ -8,6 +8,7 @@ function bboxes = tracker(varargin)
 % -------------------------------------------------------------------------------------------------
     % These are the default hyper-params for SiamFC-3S
     % The ones for SiamFC (5 scales) are in params-5s.txt
+
     
     ENABLE_KALMAN = 1;
     ENABLE_TEMPLATE_UPDATE = 1;
@@ -82,7 +83,7 @@ function bboxes = tracker(varargin)
     end
     % get avg for padding
     avgChans = gather([mean(mean(im(:,:,1))) mean(mean(im(:,:,2))) mean(mean(im(:,:,3)))]);
-    
+
     wc_z = targetSize(2) + p.contextAmount*sum(targetSize);
     hc_z = targetSize(1) + p.contextAmount*sum(targetSize);
     s_z = sqrt(wc_z*hc_z);
@@ -109,12 +110,14 @@ function bboxes = tracker(varargin)
     min_s_x_original = min_s_x;
     min_s_x_original_old = min_s_x;
     max_s_x = 5*s_x;
+
     max_s_x_original = max_s_x;
     max_s_x_original_old = max_s_x;
     
     if ENABLE_KALMAN
         [A, B, u, H, P_k, R, Q, x] = kalmanInit([targetPosition, targetSize]);
     end
+
     switch p.windowing
         case 'cosine'
             window = single(hann(p.scoreSize*p.responseUp) * hann(p.scoreSize*p.responseUp)');
@@ -207,20 +210,9 @@ function bboxes = tracker(varargin)
         oTargetSize = targetSize; % .* frameSize ./ newFrameSize;
         bboxes(i, :) = [oTargetPosition([2,1]) - oTargetSize([2,1])/2, oTargetSize([2,1])];
 
-        
-        %*********************************************
-        if ENABLE_KALMAN
-            kalmanInput          = targetPosition';
-            [kalmanOutput, P_k, x] = kalmanFilter(A, B, u, H, P_k, R, Q, x, kalmanInput); 
-            correctedROI = [kalmanOutput', targetSize];
-            targetPosition = correctedROI(1:2);
-            targetSize = correctedROI(3:4);
-            correctedRectPos = [correctedROI(2)-correctedROI(4)/2, correctedROI(1)-correctedROI(3)/2, correctedROI(4), correctedROI(3)];
-        end
-        %*********************************************
-        
         if p.visualization
             if isempty(videoPlayer)
+
                 figure(1); imshow(im/255); hold on
                 rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
                 text(rectPosition(1), rectPosition(2)+rectPosition(4)+10, ...
@@ -242,6 +234,10 @@ function bboxes = tracker(varargin)
                 title('Image ROI from previous frame', 'Fontsize', 14)
 %                 F2(i+1) = getframe(gcf);
                 
+
+                figure(1), imshow(im/255);
+                figure(1), rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
+
                 drawnow
 %                 fprintf('Frame %d\n', startFrame+i);
             else
