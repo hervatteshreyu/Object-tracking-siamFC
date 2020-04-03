@@ -24,27 +24,15 @@ function [imgs, pos, target_sz] = load_video_info(base_path, video)
     
     
 	%load ground truth from text file
-	ground_truth = dlmread([base_path '/' video '/' 'groundtruth.csv']);
+	ground_truth = dlmread([base_path '/' video '/' 'groundtruth.txt']);
     
     figure(1); imshow([video_path, cell2mat(img_files(1))]);
-	region = getrect();%
-    
-    %ped - [1217.75,197.25,126,313.5];
-    %truckSign - [516,179, 33, 32];
-    
-
-	%load ground truth from text file
-	ground_truth = dlmread([base_path '/' video '/' 'groundtruth.txt']);
 	region = ground_truth(1, :);
+    %truckSign - [516,179, 33, 32];getrect(); 
 
 	[cx, cy, w, h] = get_axis_aligned_BB(region);
     pos = [cy cx]; % centre of the bounding box
     target_sz = [h w];
-
-	%load all jpg files in the folder
-	img_files = dir([video_path '*.jpg']);
-	assert(~isempty(img_files), 'No image files to load.')
-	img_files = sort({img_files.name});
 
 	%eliminate frame 0 if it exists, since frames should only start at 1
 	img_files(strcmp('00000000.jpg', img_files)) = [];

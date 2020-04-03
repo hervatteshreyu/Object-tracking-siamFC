@@ -210,6 +210,17 @@ function bboxes = tracker(varargin)
         oTargetSize = targetSize; % .* frameSize ./ newFrameSize;
         bboxes(i, :) = [oTargetPosition([2,1]) - oTargetSize([2,1])/2, oTargetSize([2,1])];
 
+        %*********************************************
+        if ENABLE_KALMAN
+            kalmanInput          = targetPosition';
+            [kalmanOutput, P_k, x] = kalmanFilter(A, B, u, H, P_k, R, Q, x, kalmanInput); 
+            correctedROI = [kalmanOutput', targetSize];
+            targetPosition = correctedROI(1:2);
+            targetSize = correctedROI(3:4);
+            correctedRectPos = [correctedROI(2)-correctedROI(4)/2, correctedROI(1)-correctedROI(3)/2, correctedROI(4), correctedROI(3)];
+        end
+        %*********************************************
+        
         if p.visualization
             if isempty(videoPlayer)
 
@@ -239,7 +250,7 @@ function bboxes = tracker(varargin)
                 figure(1), rectangle('Position', rectPosition, 'LineWidth', 4, 'EdgeColor', 'y');
 
                 drawnow
-%                 fprintf('Frame %d\n', startFrame+i);
+                fprintf('Frame %d\n', startFrame+i);
             else
                 im = gather(im)/255;
                 im = insertShape(im, 'Rectangle', rectPosition, 'LineWidth', 4, 'Color', 'yellow');
